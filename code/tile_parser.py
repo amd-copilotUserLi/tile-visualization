@@ -177,18 +177,18 @@ class TileParser:
             
         偏移布局:
             Client 1: 中心 (0, 0)
-            Client 2: 右上 (+100, +100) 
-            Client 3: 左下 (-100, -100)
-            Client 4: 右下 (+100, -100)
-            Client 5: 左上 (-100, +100)
+            Client 2: 右上 (+50, +50) 
+            Client 3: 左上 (-50, +50)
+            Client 4: 左下 (-50, -50)
+            Client 5: 右下 (+50, -50)
         """
         # 定义最多5个client的偏移坐标 (x_offset, y_offset)
         offset_positions = [
-            (0, 0),        # 第一个client在中心，无偏移
-            (100, 100),    # 第二个client右上
-            (-100, -100),  # 第三个client左下  
-            (100, -100),   # 第四个client右下
-            (-100, 100)    # 第五个client左上
+            (0, 0),         # 第一个client在中心，无偏移
+            (50, 50),       # 第二个client右上
+            (-50, 50),      # 第三个client左下  
+            (-50, -50),     # 第四个client右下
+            (50, -50)       # 第五个client左上
         ]
         
         tile_offsets = {}
@@ -282,12 +282,10 @@ class TileParser:
                     for client_name, offset_x, offset_y in tile_offsets[tile_name]:
                         marker_x = centroid_x + offset_x
                         marker_y = centroid_y + offset_y
-                        ax.plot(marker_x, marker_y, 'o', color='red', markersize=3, alpha=0.8, 
-                               markeredgecolor='darkred', markeredgewidth=0.5)
+                        ax.plot(marker_x, marker_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01)
                 else:
                     # 没有映射关系，使用默认位置
-                    ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=3, alpha=0.8, 
-                           markeredgecolor='darkred', markeredgewidth=0.5)
+                    ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01)
             elif tile_name in highlight_or_gate_set:
                 ax.plot(centroid_x, centroid_y, '^', color='green', markersize=3, alpha=0.8, markeredgecolor='darkgreen', markeredgewidth=0.5)  
     
