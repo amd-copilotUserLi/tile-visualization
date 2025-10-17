@@ -167,19 +167,28 @@ class TileParser:
     def _calculate_client_offsets(self, tile_client_mapping):
         """
         计算同一tile中多个client的坐标偏移
+        支持最多5个client的智能偏移布局
         
         Args:
             tile_client_mapping: {tile_name: [client1, client2, ...]} 映射关系
             
         Returns:
             {tile_name: [(client_name, offset_x, offset_y), ...]}
+            
+        偏移布局:
+            Client 1: 中心 (0, 0)
+            Client 2: 右上 (+100, +100) 
+            Client 3: 左下 (-100, -100)
+            Client 4: 右下 (+100, -100)
+            Client 5: 左上 (-100, +100)
         """
-        # 定义最多4个client的偏移坐标 (x_offset, y_offset)
+        # 定义最多5个client的偏移坐标 (x_offset, y_offset)
         offset_positions = [
             (0, 0),        # 第一个client在中心，无偏移
             (100, 100),    # 第二个client右上
             (-100, -100),  # 第三个client左下  
-            (100, -100)    # 第四个client右下
+            (100, -100),   # 第四个client右下
+            (-100, 100)    # 第五个client左上
         ]
         
         tile_offsets = {}
@@ -194,7 +203,7 @@ class TileParser:
             else:
                 # 多个client，分配偏移坐标
                 client_list = []
-                for i, client in enumerate(clients[:4]):  # 最多处理4个
+                for i, client in enumerate(clients[:5]):  # 最多处理5个
                     offset_x, offset_y = offset_positions[i % len(offset_positions)]
                     client_list.append((client, offset_x, offset_y))
                 tile_offsets[tile_name] = client_list

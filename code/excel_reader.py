@@ -78,15 +78,23 @@ def read_excel_client_tile_mapping(excel_file_path):
         # 过滤掉空值
         df = df.dropna()
         
+        # 读取更多列来更好地区分client
+        df_full = pd.read_excel(excel_file_path, usecols=[0, 1, 2, 3, 4, 5], skiprows=1, header=None)
+        df_full.columns = ['module', 'instance', 'dbg_blk_id', 'flatten_module', 'flatten_instance', 'tile_name']
+        df_full = df_full.dropna(subset=['tile_name'])
+        
         # 创建tile_name到client的映射
         tile_clients = {}
-        for _, row in df.iterrows():
+        for _, row in df_full.iterrows():
             module = str(row['module']).strip()
-            instance = str(row['instance']).strip()
+            instance = str(row['instance']).strip() 
+            dbg_blk_id = str(row['dbg_blk_id']).strip()
+            flatten_module = str(row['flatten_module']).strip()
             tile_name = str(row['tile_name']).strip()
             
-            if tile_name and module and instance:
-                client_id = f"{module}::{instance}"
+            if tile_name and module and instance and dbg_blk_id != 'nan':
+                # 使用DbgBlkId作为更精确的client标识
+                client_id = f"{module}::{instance}::{dbg_blk_id}"
                 
                 if tile_name not in tile_clients:
                     tile_clients[tile_name] = []
