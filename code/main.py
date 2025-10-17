@@ -13,7 +13,7 @@ import os
 from pathlib import Path
 from tile_parser import TileParser
 from chip_parser import parse_chip_file
-from excel_reader import read_excel_column_f
+from excel_reader import read_excel_column_f, read_excel_client_tile_mapping
 from json_excel_integrator import integrate_json_excel_data
 
 # 用户可在此配置变量展开规则
@@ -105,6 +105,10 @@ def process_visualization():
         highlight_client_list = read_excel_column_f('Mapping.xlsx')
         print(f"✅ 成功读取到 {len(highlight_client_list)} 个client标记")
         
+        # 读取完整的client-tile映射关系
+        print("📊 读取client-tile映射关系...")
+        tile_client_mapping = read_excel_client_tile_mapping('Mapping.xlsx')
+        
         # 创建解析器
         parser = TileParser()
 
@@ -121,6 +125,7 @@ def process_visualization():
             show_legend=False,
             highlight_dbg=['soc_df_rpt3_mid_t','soc_df_rpt1_mid_t','soc_df_rpt6_mid_t'],
             highlight_client=highlight_client_list,
+            tile_client_mapping=tile_client_mapping,  # 传递映射关系
             #highlight_or_gate='pciess_xgmi4_1x8_pcs_ss0_mid_t5'
         )
         print(f"✅ 图像可视化完成")

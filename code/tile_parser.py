@@ -164,8 +164,45 @@ class TileParser:
         ax.plot([p1[0], p2[0]], [p1[1], p2[1]], color='black', linewidth=0.2, alpha=0.5, solid_capstyle='round')
         #ax.plot([p1[0], p2[0]], [p1[1], p2[1]], color='black', linewidth=0.2)      
 
+    def _calculate_client_offsets(self, tile_client_mapping):
+        """
+        计算同一tile中多个client的坐标偏移
+        
+        Args:
+            tile_client_mapping: {tile_name: [client1, client2, ...]} 映射关系
+            
+        Returns:
+            {tile_name: [(client_name, offset_x, offset_y), ...]}
+        """
+        # 定义最多4个client的偏移坐标 (x_offset, y_offset)
+        offset_positions = [
+            (0, 0),        # 第一个client在中心，无偏移
+            (100, 100),    # 第二个client右上
+            (-100, -100),  # 第三个client左下  
+            (100, -100)    # 第四个client右下
+        ]
+        
+        tile_offsets = {}
+        
+        for tile_name, clients in tile_client_mapping.items():
+            if tile_name not in self.tiles_dict:
+                continue  # 跳过不存在的tile
+                
+            if len(clients) == 1:
+                # 单个client，不需要偏移
+                tile_offsets[tile_name] = [(clients[0], 0, 0)]
+            else:
+                # 多个client，分配偏移坐标
+                client_list = []
+                for i, client in enumerate(clients[:4]):  # 最多处理4个
+                    offset_x, offset_y = offset_positions[i % len(offset_positions)]
+                    client_list.append((client, offset_x, offset_y))
+                tile_offsets[tile_name] = client_list
+                
+        return tile_offsets
+
     def plot(self, title="Tile Layout Visualization", figsize=(12, 8), show_labels=False, save_path=None, dpi=300, show_legend=False, 
-              highlight_dbg=None, highlight_client=None, highlight_or_gate=None):
+              highlight_dbg=None, highlight_client=None, highlight_or_gate=None, tile_client_mapping=None):
         """
         绘图并可选保存为高分辨率图像
         :param title: 图表标题
@@ -174,6 +211,10 @@ class TileParser:
         :param save_path: 图像保存路径（如 'output.png' 或 'output.pdf'), None 表示不保存
         :param dpi: 分辨率(DPI), 默认 300,适合打印/展示
         :param show_legend: 是否显示图例
+        :param highlight_dbg: 调试标记列表
+        :param highlight_client: 客户端标记列表  
+        :param highlight_or_gate: OR门标记列表
+        :param tile_client_mapping: tile到client的映射关系 {tile_name: [client1, client2, ...]}
         """
         if not self.tiles_dict:
             print("⚠️ 无数据可绘图，请先调用 parse_from_csv()")
@@ -192,6 +233,11 @@ class TileParser:
         highlight_dbg_set = to_set(highlight_dbg)
         highlight_client_set = to_set(highlight_client)
         highlight_or_gate_set = to_set(highlight_or_gate)
+        
+        # 计算client标记的偏移坐标
+        tile_offsets = {}
+        if tile_client_mapping:
+            tile_offsets = self._calculate_client_offsets(tile_client_mapping)
 
         for tile_name, data in self.tiles_dict.items():
             vertices = data['vertices']
@@ -221,7 +267,18 @@ class TileParser:
             if tile_name in highlight_dbg_set:
                 ax.plot(centroid_x, centroid_y, 's', color='blue', markersize=3, alpha=0.8, markeredgecolor='darkblue', markeredgewidth=0.5)
             elif tile_name in highlight_client_set:
-                ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=3, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.5)
+                # 检查是否有多个client需要偏移
+                if tile_name in tile_offsets:
+                    # 有映射关系，绘制所有client标记
+                    for client_name, offset_x, offset_y in tile_offsets[tile_name]:
+                        marker_x = centroid_x + offset_x
+                        marker_y = centroid_y + offset_y
+                        ax.plot(marker_x, marker_y, 'o', color='red', markersize=3, alpha=0.8, 
+                               markeredgecolor='darkred', markeredgewidth=0.5)
+                else:
+                    # 没有映射关系，使用默认位置
+                    ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=3, alpha=0.8, 
+                           markeredgecolor='darkred', markeredgewidth=0.5)
             elif tile_name in highlight_or_gate_set:
                 ax.plot(centroid_x, centroid_y, '^', color='green', markersize=3, alpha=0.8, markeredgecolor='darkgreen', markeredgewidth=0.5)  
     
