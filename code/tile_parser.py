@@ -243,6 +243,15 @@ class TileParser:
         highlight_client_set = to_set(highlight_client)
         highlight_or_gate_set = to_set(highlight_or_gate)
         
+        # 检查highlight_client中不存在的tile
+        available_tiles = set(self.tiles_dict.keys())
+        missing_client_tiles = highlight_client_set - available_tiles
+        if missing_client_tiles:
+            print("⚠️ 警告：以下highlight_client中的tile在绘图数据中不存在：")
+            for missing_tile in sorted(missing_client_tiles):
+                print(f"   • {missing_tile}")
+            print(f"   总计：{len(missing_client_tiles)} 个未匹配的tile")
+        
         # 计算client标记的偏移坐标
         tile_offsets = {}
         if tile_client_mapping:
