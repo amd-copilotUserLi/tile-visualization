@@ -340,6 +340,20 @@ class TileParser:
         ax.grid(True, linestyle='--', alpha=0.2)
         ax.set_aspect('equal')
 
+        # 添加简单的标记图例
+        from matplotlib.lines import Line2D
+        legend_elements = [
+            Line2D([0], [0], marker='s', color='w', markerfacecolor='blue', markersize=4, 
+                   label='Debug Unit', markeredgecolor='darkblue', markeredgewidth=0.3),
+            Line2D([0], [0], marker='o', color='w', markerfacecolor='red', markersize=3, 
+                   label='Debug Client', markeredgecolor='darkred', markeredgewidth=0.3),
+            Line2D([0], [0], marker='^', color='w', markerfacecolor='green', markersize=4, 
+                   label='OR Gate', markeredgecolor='darkgreen', markeredgewidth=0.3)
+        ]
+        ax.legend(handles=legend_elements, loc='lower right', fontsize=6, 
+                 frameon=True, fancybox=True, shadow=False, framealpha=0.8,
+                 handlelength=1, handletextpad=0.5, columnspacing=0.5)
+
         plt.tight_layout()
 
         # 保存图像
