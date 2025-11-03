@@ -22,14 +22,18 @@ expand_dict = {
 
 def main():
     """主程序入口 - 整合所有功能"""
-    print("� DFD自动化工具启动")
+    print("🚀 DFD自动化工具启动")
     print("=" * 50)
+    
+    # 🔧 用户配置参数
+    # 设置为1开启有client的tile上显示tile名称功能，设置为0关闭此功能（默认）
+    show_client_tile_names = 1  # 用户可在此修改：0=不显示, 1=显示tile名称
     
     # 创建处理器实例
     processor = DFDProcessor(expand_dict)
     
-    # 运行完整分析流程
-    result = processor.run_complete_analysis()
+    # 运行完整分析流程（传入开关参数）
+    result = processor.run_complete_analysis(show_client_tile_names=show_client_tile_names)
     
     # 输出结果
     print("\n" + "=" * 50)

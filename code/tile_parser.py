@@ -210,20 +210,19 @@ class TileParser:
                 
         return tile_offsets
 
-    def plot(self, title="Tile Layout Visualization", figsize=(12, 8), show_labels=False, save_path=None, dpi=300, show_legend=False, 
-              highlight_dbg=None, highlight_client=None, highlight_or_gate=None, tile_client_mapping=None):
+    def plot(self, title="Tile Layout Visualization", figsize=(12, 8), save_path=None, dpi=300, 
+              highlight_dbg=None, highlight_client=None, highlight_or_gate=None, tile_client_mapping=None, show_client_tile_names=0):
         """
         绘图并可选保存为高分辨率图像
         :param title: 图表标题
         :param figsize: 图像大小
-        :param show_labels: 是否显示标签
         :param save_path: 图像保存路径（如 'output.png' 或 'output.pdf'), None 表示不保存
         :param dpi: 分辨率(DPI), 默认 300,适合打印/展示
-        :param show_legend: 是否显示图例
         :param highlight_dbg: 调试标记列表
         :param highlight_client: 客户端标记列表  
         :param highlight_or_gate: OR门标记列表
         :param tile_client_mapping: tile到client的映射关系 {tile_name: [client1, client2, ...]}
+        :param show_client_tile_names: 是否在有client的tile上显示tile名称 (0=不显示, 1=显示)
         """
         if not self.tiles_dict:
             print("⚠️ 无数据可绘图，请先调用 parse_from_csv()")
@@ -257,6 +256,34 @@ class TileParser:
         if tile_client_mapping:
             tile_offsets = self._calculate_client_offsets(tile_client_mapping)
 
+        def calculate_adaptive_font_size(vertices, tile_name):
+            """根据tile尺寸和名称长度计算合适的字体大小"""
+            # 计算tile的边界框尺寸
+            xs = [v[0] for v in vertices]
+            ys = [v[1] for v in vertices]
+            width = max(xs) - min(xs)
+            height = max(ys) - min(ys)
+            
+            # 计算最小边长
+            min_dimension = min(width, height)
+            
+            # 基于最小边长计算基础字体大小，降低比例因子
+            base_font_size = max(2, min_dimension / 400)  # 更小的基础字体
+            
+            # 根据字符长度调整
+            name_length = len(tile_name)
+            if name_length > 15:
+                font_size = base_font_size * 0.5
+            elif name_length > 12:
+                font_size = base_font_size * 0.6
+            elif name_length > 8:
+                font_size = base_font_size * 0.75
+            else:
+                font_size = base_font_size
+            
+            # 限制字体大小范围，更小的范围
+            return max(1.5, min(6, font_size))  # 最小1.5pt，最大6pt
+
         for tile_name, data in self.tiles_dict.items():
             vertices = data['vertices']
             if len(vertices) < 3:
@@ -269,19 +296,22 @@ class TileParser:
 
             self._draw_orient_marker(ax, vertices, data['orient'])
         
-            # 可选：显示标签
-            if show_labels:
-                centroid_x = np.mean([v[0] for v in vertices])
-                centroid_y = np.mean([v[1] for v in vertices])
-                label = f"{tile_name}\n({data['orient']})"
-                ax.text(centroid_x, centroid_y, label, fontsize=8, ha='center', va='center',
-                        color='white', weight='bold',
-                        bbox=dict(boxstyle="round,pad=0.3", facecolor="gray", alpha=0.7))
-
             # 🔹 分类型绘制中心点标记
             centroid_x = np.mean([v[0] for v in vertices])
             centroid_y = np.mean([v[1] for v in vertices])
     
+            # 🔹 先绘制tile名称（如果开关开启），再绘制标记点
+            if show_client_tile_names and tile_name in highlight_client_set:
+                font_size = calculate_adaptive_font_size(vertices, tile_name)
+                
+                # 直接显示黑色文字，无背景
+                ax.text(centroid_x, centroid_y, tile_name, 
+                       fontsize=font_size, 
+                       ha='center', va='center',
+                       color='black', 
+                       weight='normal')  # 无背景，简洁显示
+    
+            # 🔹 然后绘制标记点，确保在文字之上
             if tile_name in highlight_dbg_set:
                 ax.plot(centroid_x, centroid_y, 's', color='blue', markersize=3, alpha=0.8, markeredgecolor='darkblue', markeredgewidth=0.5)
             elif tile_name in highlight_client_set:
@@ -291,10 +321,10 @@ class TileParser:
                     for client_name, offset_x, offset_y in tile_offsets[tile_name]:
                         marker_x = centroid_x + offset_x
                         marker_y = centroid_y + offset_y
-                        ax.plot(marker_x, marker_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01)
+                        ax.plot(marker_x, marker_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01, zorder=10)
                 else:
                     # 没有映射关系，使用默认位置
-                    ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01)
+                    ax.plot(centroid_x, centroid_y, 'o', color='red', markersize=1, alpha=0.8, markeredgecolor='darkred', markeredgewidth=0.01, zorder=10)
             elif tile_name in highlight_or_gate_set:
                 ax.plot(centroid_x, centroid_y, '^', color='green', markersize=3, alpha=0.8, markeredgecolor='darkgreen', markeredgewidth=0.5)  
     
@@ -310,13 +340,6 @@ class TileParser:
         ax.grid(True, linestyle='--', alpha=0.2)
         ax.set_aspect('equal')
 
-        # 可选：显示图例
-        if show_legend:
-            handles = []
-            for master, color in master_color_map.items():
-                handles.append(plt.Rectangle((0, 0), 1, 1, facecolor=color, edgecolor='black', alpha=0.7))
-            ax.legend(handles, master_color_map.keys(), title="Master", loc='upper right', bbox_to_anchor=(1.15, 1))
-
         plt.tight_layout()
 
         # 保存图像
@@ -326,8 +349,10 @@ class TileParser:
             plt.savefig(save_path, dpi=dpi, bbox_inches='tight', pad_inches=0.1)
             print(f"💾 图像已保存至: {save_path} (DPI={dpi})")
 
-        # 显示图像
-        plt.show()
+        # 显示图像（2秒后自动关闭）
+        plt.show(block=False)
+        plt.pause(2)  # 显示2秒
+        plt.close()   # 自动关闭
 
     def __len__(self):
         return len(self.tiles_dict)

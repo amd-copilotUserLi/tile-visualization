@@ -26,6 +26,7 @@ class DFDProcessor:
         """
         self.expand_dict = expand_dict
         self.unmatched_analysis = None
+        self.output_dir = Path(os.path.dirname(__file__)) / '..' / 'output'
         
     def expand_instance_name(self, name):
         """展开实例名称中的变量"""
@@ -93,9 +94,17 @@ class DFDProcessor:
         
         return len(blocks), len(result)
 
-    def process_visualization(self):
-        """处理Tile可视化"""
+    def process_visualization(self, show_client_tile_names=0):
+        """处理Tile可视化
+        
+        Args:
+            show_client_tile_names: 是否在有client的tile上显示tile名称 (0=不显示, 1=显示)
+        """
         print("\n🎨 开始处理Tile可视化...")
+        
+        # 如果开启了tile名称显示，输出提示信息
+        if show_client_tile_names:
+            print("🏷️ 已启用client tile名称显示功能")
         
         # 确保输出目录存在
         output_dir = Path(os.path.dirname(__file__)) / '..' / 'output'
@@ -132,13 +141,12 @@ class DFDProcessor:
             print("🎨 开始绘制tile可视化图...")
             parser.plot(
                 title="Tile Visualization by Master & Orient",
-                show_labels=False,
                 save_path=str(save_path),
                 dpi=1200,
-                show_legend=False,
                 highlight_dbg=['soc_df_rpt4_mid_t','soc_df_rpt12_mid_t','soc_df_rpt8_mid_t'],
                 highlight_client=highlight_client_list,
                 tile_client_mapping=tile_client_mapping,  # 传递映射关系
+                show_client_tile_names=show_client_tile_names,  # 传递开关参数
                 #highlight_or_gate='pciess_xgmi4_1x8_pcs_ss0_mid_t5'
             )
             print(f"✅ 图像可视化完成")
@@ -153,9 +161,55 @@ class DFDProcessor:
             print(f"⚠️ 可视化处理错误: {e}")
             return False, set(), 0, 0
 
+    def analyze_unmatched_json_entries(self):
+        """分析JSON中未匹配的条目（空tile_name）"""
+        print("\n🔍 分析JSON中未匹配的条目...")
+        
+        json_file_path = Path(self.output_dir) / "chip_blocks_integrated.json"
+        if not json_file_path.exists():
+            json_file_path = Path(self.output_dir) / "chip_blocks.json"
+        
+        unmatched_json_entries = []
+        total_pairs = 0
+        filled_pairs = 0
+        
+        with open(json_file_path, 'r', encoding='utf-8') as f:
+            json_data = json.load(f)
+        
+        for json_key, json_entry in json_data.items():
+            module = json_entry.get('module', '')
+            instance = json_entry.get('instance', '')
+            
+            if 'pairs' in json_entry:
+                for pair in json_entry['pairs']:
+                    total_pairs += 1
+                    tile_name = pair.get('tile_name', '').strip()
+                    dbg_blk_id = pair.get('DbgBlkId', '').strip()
+                    
+                    if tile_name:
+                        filled_pairs += 1
+                    else:
+                        # 记录未匹配的条目
+                        unmatched_json_entries.append({
+                            'module': module,
+                            'instance': instance,
+                            'dbg_blk_id': dbg_blk_id,
+                            'json_key': json_key
+                        })
+        
+        return {
+            'unmatched_entries': unmatched_json_entries,
+            'total_pairs': total_pairs,
+            'filled_pairs': filled_pairs,
+            'unmatched_count': len(unmatched_json_entries)
+        }
+
     def generate_analysis_report(self, missing_client_tiles=None, available_tiles_count=0, highlight_client_count=0):
         """生成数据分析报告"""
         output_dir = Path(os.path.dirname(__file__)) / '..' / 'output'
+        
+        # 分析JSON未匹配条目
+        json_unmatch_analysis = self.analyze_unmatched_json_entries()
         
         # 创建合并报告
         combined_report_file = output_dir / "data_analysis_report.txt"
@@ -167,32 +221,50 @@ class DFDProcessor:
             f.write("=" * 60 + "\n")
             f.write(f"生成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n\n")
             
-            # 第一部分：Excel-JSON未匹配分析
-            f.write("第一部分：Excel-JSON数据匹配分析\n")
-            f.write("-" * 40 + "\n")
+            # 第一部分：JSON未填充条目分析
+            f.write("第一部分：JSON中未填充tile_name的条目分析\n")
+            f.write("-" * 50 + "\n")
             
-            if self.unmatched_analysis:
-                f.write("统计概览:\n")
-                f.write(f"  • 未匹配的Excel条目数: {self.unmatched_analysis['unmatched_excel_entries_count']}\n")
-                f.write(f"  • 未匹配的Excel模块数（去重）: {self.unmatched_analysis['unmatched_excel_modules_count']}\n")
-                f.write(f"  • JSON中的总模块数: {len(self.unmatched_analysis['json_modules'])}\n\n")
-                
-                f.write("未匹配的Excel模块列表（去重）:\n")
+            f.write(f"JSON数据统计：\n")
+            f.write(f"• 总配对数 (pairs): {json_unmatch_analysis['total_pairs']}\n")
+            f.write(f"• 已填充tile_name数: {json_unmatch_analysis['filled_pairs']}\n")
+            f.write(f"• 未填充tile_name数: {json_unmatch_analysis['unmatched_count']}\n")
+            if json_unmatch_analysis['total_pairs'] > 0:
+                fill_rate = (json_unmatch_analysis['filled_pairs'] / json_unmatch_analysis['total_pairs']) * 100
+                f.write(f"• 填充成功率: {fill_rate:.1f}%\n\n")
+            
+            # 添加警告信息
+            if json_unmatch_analysis['unmatched_count'] > 0:
+                warning_messages.append(f"⚠️ JSON未填充条目: {json_unmatch_analysis['unmatched_count']}个")
+            
+            # 详细列出未匹配的条目
+            if json_unmatch_analysis['unmatched_entries']:
+                f.write(f"未填充tile_name的详细条目 (前50个):\n")
                 f.write("-" * 30 + "\n")
-                for module in self.unmatched_analysis['unmatched_excel_modules']:
-                    f.write(f"  • {module}\n")
                 
-                if self.unmatched_analysis['common_modules']:
-                    f.write(f"\nExcel和JSON都有但未匹配的模块 ({len(self.unmatched_analysis['common_modules'])}个):\n")
-                    f.write("-" * 30 + "\n")
-                    for module in self.unmatched_analysis['common_modules']:
-                        f.write(f"  • {module}\n")
-                        
-                    # 添加警告信息
-                    if self.unmatched_analysis['unmatched_excel_modules_count'] > 0:
-                        warning_messages.append(f"⚠️ Excel-JSON未匹配模块: {self.unmatched_analysis['unmatched_excel_modules_count']}个")
-            else:
-                f.write("未找到Excel-JSON匹配分析数据\n\n")
+                # 按模块分组显示
+                entries_by_module = {}
+                for entry in json_unmatch_analysis['unmatched_entries']:
+                    module = entry['module']
+                    if module not in entries_by_module:
+                        entries_by_module[module] = []
+                    entries_by_module[module].append(entry)
+                
+                count = 0
+                for module, entries in entries_by_module.items():
+                    if count >= 50:
+                        break
+                    f.write(f"\n模块: {module}\n")
+                    for entry in entries[:10]:  # 每个模块最多显示10个
+                        if count >= 50:
+                            break
+                        f.write(f"  • 实例: {entry['instance']}, DbgBlkId: {entry['dbg_blk_id']}\n")
+                        count += 1
+                    if len(entries) > 10:
+                        f.write(f"  ... 该模块还有 {len(entries) - 10} 个未匹配条目\n")
+                
+                if json_unmatch_analysis['unmatched_count'] > 50:
+                    f.write(f"\n... 总计还有 {json_unmatch_analysis['unmatched_count'] - 50} 个未显示的未匹配条目\n")
             
             # 第二部分：Tile绘图匹配分析
             f.write("\n第二部分：Tile绘图数据匹配分析\n")
@@ -222,22 +294,29 @@ class DFDProcessor:
             f.write("\n第三部分：总结和建议\n")
             f.write("-" * 40 + "\n")
             f.write("建议处理步骤：\n")
-            f.write("1. 检查Excel文件中的模块命名是否与JSON数据一致\n")
-            f.write("2. 验证Tile名称在MID.csv文件中是否存在\n")
-            f.write("3. 确保数据源之间的同步性\n")
-            f.write("4. 考虑更新数据映射规则以提高匹配率\n")
+            f.write("1. 检查Excel文件(Mapping.xlsx)中的模块命名是否与JSON数据一致\n")
+            f.write("2. 检查Excel文件中的instance名称是否与JSON数据匹配\n")
+            f.write("3. 检查Excel文件中的DbgBlkId是否与JSON数据中的DbgBlkId匹配\n")
+            f.write("4. 验证Excel文件F列的Tile名称在MID.csv文件中是否存在\n")
+            f.write("5. 确保数据源之间的同步性\n")
+            f.write("6. 考虑更新数据映射规则以提高匹配率\n")
+            f.write("7. 检查测试数据是否已正确清理\n")
         
         print(f"📄 合并分析报告已保存到: {combined_report_file}")
         return warning_messages
 
-    def run_complete_analysis(self):
-        """运行完整的DFD分析流程"""
+    def run_complete_analysis(self, show_client_tile_names=0):
+        """运行完整的DFD分析流程
+        
+        Args:
+            show_client_tile_names: 是否在有client的tile上显示tile名称 (0=不显示, 1=显示)
+        """
         try:
             # 处理芯片块解析和JSON生成
             blocks_count, result_count = self.process_chip_blocks()
             
             # 处理Tile可视化
-            visualization_success, missing_client_tiles, available_tiles_count, highlight_client_count = self.process_visualization()
+            visualization_success, missing_client_tiles, available_tiles_count, highlight_client_count = self.process_visualization(show_client_tile_names)
             
             # 生成合并报告并获取警告信息
             warning_messages = self.generate_analysis_report(
